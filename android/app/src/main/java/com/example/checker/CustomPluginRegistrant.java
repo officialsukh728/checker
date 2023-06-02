@@ -1,4 +1,4 @@
-package com.example.checker;
+package com.checker.device;
 
 import androidx.annotation.Keep;
 import androidx.annotation.NonNull;

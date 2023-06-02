@@ -1,4 +1,4 @@
-package com.example.checker;
+package com.checker.device;
 
 import com.rmawatson.flutterisolate.FlutterIsolatePlugin;
 

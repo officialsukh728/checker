@@ -1,4 +1,4 @@
-package com.example.checker;
+package com.checker.device;
 
 import io.flutter.embedding.android.FlutterActivity;
 
