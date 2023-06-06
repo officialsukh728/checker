@@ -1,7 +1,9 @@
 import 'package:camera/camera.dart';
+import 'package:checker/business_logic/blocs/call_log_bloc/call_log_bloc.dart';
 import 'package:checker/main.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:checker/screens/vision_detector_views/face_detector_view.dart';
 
@@ -14,20 +16,19 @@ class EyeTrackerScreen extends StatefulWidget {
 
 class EyeTrackerScreenState extends State<EyeTrackerScreen> {
   CameraController? _cameraController;
-  bool _isCameraInitialized = false;
-  List<Face> _faces = [];
   int _cameraIndex = -1;
+
   @override
   void initState() {
     super.initState();
     if (cameras.any(
-          (element) =>
-      element.lensDirection == CameraLensDirection.front &&
+      (element) =>
+          element.lensDirection == CameraLensDirection.front &&
           element.sensorOrientation == 90,
     )) {
       _cameraIndex = cameras.indexOf(
         cameras.firstWhere((element) =>
-        element.lensDirection == CameraLensDirection.front &&
+            element.lensDirection == CameraLensDirection.front &&
             element.sensorOrientation == 90),
       );
     } else {
@@ -52,62 +53,58 @@ class EyeTrackerScreenState extends State<EyeTrackerScreen> {
     );
     await _cameraController!.initialize();
     if (mounted) {
-      setState(() {
-        _isCameraInitialized = true;
-      });
+      context.read<IsCameraInitializedToggleBloc>().add(true);
       _startFaceDetection();
     }
   }
 
   Future<void> _startFaceDetection() async {
     _cameraController!.startImageStream((CameraImage image) async {
-      if (_isCameraInitialized) {
-        final WriteBuffer allBytes = WriteBuffer();
-        for (final Plane plane in image.planes) {
-          allBytes.putUint8List(plane.bytes);
-        }
-        final bytes = allBytes.done().buffer.asUint8List();
-
-        final Size imageSize =
-        Size(image.width.toDouble(), image.height.toDouble());
-
-        final camera = cameras[_cameraIndex];
-        final imageRotation =
-        InputImageRotationValue.fromRawValue(camera.sensorOrientation);
-        if (imageRotation == null) return;
-
-        final inputImageFormat =
-        InputImageFormatValue.fromRawValue(image.format.raw);
-        if (inputImageFormat == null) return;
-
-        final planeData = image.planes.map(
-              (Plane plane) {
-            return InputImagePlaneMetadata(
-              bytesPerRow: plane.bytesPerRow,
-              height: plane.height,
-              width: plane.width,
-            );
-          },
-        ).toList();
-
-        final inputImageData = InputImageData(
-          size: imageSize,
-          imageRotation: imageRotation,
-          inputImageFormat: inputImageFormat,
-          planeData: planeData,
-        );
-
-        final inputImage =
-        InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
-      await FaceDetector(
-          options: FaceDetectorOptions(
-            enableContours: true,
-            enableClassification: true,
-          ),
-        ).processImage(inputImage).then((value) => setState(() {
-          _faces = value;
-        }));
+      final WriteBuffer allBytes = WriteBuffer();
+      for (final Plane plane in image.planes) {
+        allBytes.putUint8List(plane.bytes);
       }
+      final bytes = allBytes.done().buffer.asUint8List();
+
+      final Size imageSize =
+          Size(image.width.toDouble(), image.height.toDouble());
+
+      final camera = cameras[_cameraIndex];
+      final imageRotation =
+          InputImageRotationValue.fromRawValue(camera.sensorOrientation);
+      if (imageRotation == null) return;
+
+      final inputImageFormat =
+          InputImageFormatValue.fromRawValue(image.format.raw);
+      if (inputImageFormat == null) return;
+
+      final planeData = image.planes.map(
+        (Plane plane) {
+          return InputImagePlaneMetadata(
+            bytesPerRow: plane.bytesPerRow,
+            height: plane.height,
+            width: plane.width,
+          );
+        },
+      ).toList();
+
+      final inputImageData = InputImageData(
+        size: imageSize,
+        imageRotation: imageRotation,
+        inputImageFormat: inputImageFormat,
+        planeData: planeData,
+      );
+
+      final inputImage =
+          InputImage.fromBytes(bytes: bytes, inputImageData: inputImageData);
+      await FaceDetector(
+        options: FaceDetectorOptions(
+          enableContours: true,
+          enableClassification: true,
+        ),
+      )
+          .processImage(inputImage)
+          .then((value) => context.read<ProcessImageRebuildBloc>().add(value));
     });
   }
 
@@ -123,19 +120,29 @@ class EyeTrackerScreenState extends State<EyeTrackerScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          if (_isCameraInitialized)
-            Transform.scale(
-              scale: scale,
-              child: Center(
-                child: CameraPreview(_cameraController!),
-              ),
-            ),
-            // AspectRatio(
-            //   aspectRatio: _cameraController!.value.aspectRatio,
-            //   child: CameraPreview(_cameraController!),
-            // ),
-          CustomPaint(
-            painter: EyeTrackingPainter(_faces),
+          BlocBuilder<IsCameraInitializedToggleBloc, bool>(
+            builder: (context, state) {
+              return Visibility(
+                visible: state,
+                child: Transform.scale(
+                  scale: scale,
+                  child: Center(
+                    child: CameraPreview(_cameraController!),
+                  ),
+                ),
+              );
+            },
+          ),
+          // AspectRatio(
+          //   aspectRatio: _cameraController!.value.aspectRatio,
+          //   child: CameraPreview(_cameraController!),
+          // ),
+          BlocBuilder<ProcessImageRebuildBloc, List<Face>>(
+            builder: (context, state) {
+              return CustomPaint(
+                painter: EyeTrackingPainter(state),
+              );
+            },
           ),
         ],
       ),
@@ -164,6 +171,7 @@ class EyeTrackingPainter extends CustomPainter {
     for (final face in faces) {
       final leftEyeContour = face.contours[FaceContourType.leftEye]?.points;
       final rightEyeContour = face.contours[FaceContourType.rightEye]?.points;
+
       /// Process iris movements based on the eye contours
       final leftIrisMovement = leftEyeContour != null
           ? calculateIrisMovement(leftEyeContour)

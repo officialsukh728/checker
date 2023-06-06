@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:checker/business_logic/services/http_service/response_wrapper.dart';
 import 'package:checker/utils/all_getter.dart';
 import 'package:checker/utils/widgets/helpers.dart';
+import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 
 part 'call_log_event.dart';
 
@@ -46,6 +47,22 @@ class SelectedSubscriptionToggleBloc extends Bloc<int, int> {
   }
 }
 
+class TouchSpeedToggleBloc extends Bloc<double, double> {
+  TouchSpeedToggleBloc() : super(0.0) {
+    on<double>((event, emit) {
+      emit(event);
+    });
+  }
+}
+
+class IsCameraInitializedToggleBloc extends Bloc<bool, bool> {
+  IsCameraInitializedToggleBloc() : super(false) {
+    on<bool>((event, emit) {
+      emit(event);
+    });
+  }
+}
+
 class ProcessIrisMovementModelBloc
     extends Bloc<ProcessIrisMovementModel, ProcessIrisMovementModel> {
   ProcessIrisMovementModelBloc()
@@ -53,6 +70,14 @@ class ProcessIrisMovementModelBloc
             leftIrisMovement: const Offset(0, 0),
             rightIrisMovement: const Offset(0, 0))) {
     on<ProcessIrisMovementModel>((event, emit) {
+      emit(event);
+    });
+  }
+}
+
+class ProcessImageRebuildBloc extends Bloc<List<Face>, List<Face>> {
+  ProcessImageRebuildBloc() : super(<Face>[]) {
+    on<List<Face>>((event, emit) {
       emit(event);
     });
   }

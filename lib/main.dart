@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:checker/firebase_options.dart';
 import 'package:checker/screens/my_app.dart';
 import 'package:checker/utils/widgets/helpers.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,7 +26,7 @@ void backgroundFetchHeadlessTask(HeadlessTask task) async {
     BackgroundFetch.finish(taskId);
     return;
   }
-  getSetUnlockCount();
+  DashboardState().getSetUnlockCount();
   if (taskId == 'flutter_background_fetch') {
     BackgroundFetch.scheduleTask(
       TaskConfig(
@@ -44,7 +45,7 @@ void backgroundFetchHeadlessTask(HeadlessTask task) async {
 void isolate1(String arg) async {
   Timer.periodic(
     const Duration(seconds: 1),
-    (timer) => getSetUnlockCount(arg: "isolate"),
+    (timer) => DashboardState().getSetUnlockCount(arg: "isolate"),
   );
 }
 
@@ -52,21 +53,8 @@ void isolate1(String arg) async {
 void computeFunction(String arg) async {
   Timer.periodic(
     const Duration(seconds: 1),
-    (timer) => getSetUnlockCount(arg: "computeFunction"),
+    (timer) => DashboardState().getSetUnlockCount(arg: "computeFunction"),
   );
-}
-
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  await Hive.initFlutter();
-  await w.Workmanager().initialize(callbackDispatcher);
-  cameras = await availableCameras();
-  BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  await AppInjector.init(appRunner: () => runApp(const MyApp()));
 }
 
 ///TOP-LEVEL FUNCTION PROVIDED FOR WORK MANAGER AS CALLBACK
@@ -82,11 +70,26 @@ Future<bool> _onExecuteTask({
 }) async {
   printLog('Background Services are Working!');
   try {
-    getSetUnlockCount();
+    DashboardState().getSetUnlockCount();
     return true;
   } on PlatformException catch (e, s) {
     printLog(e);
     printLog(s);
     return true;
   }
+}
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  cameras = await availableCameras();
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await w.Workmanager().initialize(callbackDispatcher);
+  BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  )
+      .then((value) => FirebaseAuth.instanceFor(app: value))
+      .then((value) => printLog("FirebaseAuth ${value.currentUser} "));
+  await AppInjector.init(appRunner: () => runApp(const MyApp()));
 }

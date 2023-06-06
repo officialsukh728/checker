@@ -1,5 +1,6 @@
 import 'package:camera/camera.dart';
 import 'package:checker/business_logic/blocs/call_log_bloc/call_log_bloc.dart';
+import 'package:checker/business_logic/blocs/face_detector_rebuild_bloc/face_detector_rebuild_bloc.dart';
 import 'package:checker/screens/dashboard/dashboard.dart';
 import 'package:checker/utils/widgets/helpers.dart';
 import 'package:flutter/material.dart';
@@ -11,13 +12,123 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-// Store the previous eye contour positions
 List<Offset>? previousLeftEyeContour;
 List<Offset>? previousRightEyeContour;
 
-// SharedPreferences key
-const String irisMovementKey = 'irisMovement';
+class FaceDetectorView extends StatefulWidget {
+  const FaceDetectorView({super.key});
+
+  @override
+  State<FaceDetectorView> createState() => FaceDetectorViewState();
+}
+
+class FaceDetectorViewState extends State<FaceDetectorView> {
+  bool _canProcess = true;
+  bool _isBusy = false;
+  CustomPaint? _customPaint;
+  String? _text;
+  int _conut = 0;
+  final FaceDetector _faceDetector = FaceDetector(
+    options: FaceDetectorOptions(
+      enableContours: true,
+      enableClassification: true,
+    ),
+  );
+
+  @override
+  void initState() {
+    _conut = DashboardState().eyeBlinkingCount;
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _canProcess = false;
+    _faceDetector.close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<FaceDetectorRebuildBloc, FaceDetectorRebuildState>(
+      builder: (context, state) {
+        return CameraView(
+          title:
+              'Face Detector Count : $_conut ${DashboardState().eyeBlinkingCount}',
+          customPaint: _customPaint,
+          text: _text,
+          onImage: (inputImage) {
+            processImage(inputImage);
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> processImage(InputImage inputImage) async {
+    if (!_canProcess) return;
+    if (_isBusy) return;
+    _isBusy = true;
+    final faces = await _faceDetector.processImage(inputImage);
+    if (mounted) {
+      final count = _conut + countEyeBlinks(faces, context);
+      await saveEyeCountRecords(count);
+      await DashboardState().setEyeBlinkingCountCount();
+      if (DashboardState().eyeBlinkingCount != count) {
+        printLog('countEyeBlinks+++==> $count');
+      }
+      DashboardState().eyeBlinkingCount = count;
+      if (mounted) {
+        _text = '';
+        _conut = count;
+        context
+            .read<FaceDetectorRebuildBloc>()
+            .add(SetGetFaceDetectorRebuildEvent());
+      }
+    }
+    if (inputImage.inputImageData?.size != null &&
+        inputImage.inputImageData?.imageRotation != null) {
+      _customPaint = CustomPaint(
+          painter: FaceDetectorPainter(faces, inputImage.inputImageData!.size,
+              inputImage.inputImageData!.imageRotation));
+    } else {
+      String text = 'Faces found: ${faces.length}\n\n';
+      for (final face in faces) {
+        text += 'face: ${face.boundingBox}\n\n';
+      }
+      _text = text;
+      _customPaint = null;
+    }
+    _isBusy = false;
+    if (mounted) {
+      context
+          .read<FaceDetectorRebuildBloc>()
+          .add(SetGetFaceDetectorRebuildEvent());
+    }
+  }
+}
+
+class CameraView extends StatefulWidget {
+  const CameraView({
+    Key? key,
+    required this.title,
+    required this.customPaint,
+    this.text,
+    required this.onImage,
+    this.initialDirection = CameraLensDirection.front,
+  }) : super(key: key);
+
+  final String title;
+  final CustomPaint? customPaint;
+  final String? text;
+  final Function(InputImage inputImage) onImage;
+  final CameraLensDirection initialDirection;
+
+  @override
+  State<CameraView> createState() => _CameraViewState();
+}
 
 class FaceDetectorPainter extends CustomPainter {
   FaceDetectorPainter(this.faces, this.absoluteImageSize, this.rotation);
@@ -85,62 +196,6 @@ class FaceDetectorPainter extends CustomPainter {
     return oldDelegate.absoluteImageSize != absoluteImageSize ||
         oldDelegate.faces != faces;
   }
-}
-
-double translateX(
-  double x,
-  InputImageRotation rotation,
-  Size size,
-  Size absoluteImageSize,
-) {
-  switch (rotation) {
-    case InputImageRotation.rotation90deg:
-      return x *
-          size.width /
-          (Platform.isIOS ? absoluteImageSize.width : absoluteImageSize.height);
-    case InputImageRotation.rotation270deg:
-      return size.width -
-          x *
-              size.width /
-              (Platform.isIOS
-                  ? absoluteImageSize.width
-                  : absoluteImageSize.height);
-    default:
-      return x * size.width / absoluteImageSize.width;
-  }
-}
-
-double translateY(
-    double y, InputImageRotation rotation, Size size, Size absoluteImageSize) {
-  switch (rotation) {
-    case InputImageRotation.rotation90deg:
-    case InputImageRotation.rotation270deg:
-      return y *
-          size.height /
-          (Platform.isIOS ? absoluteImageSize.height : absoluteImageSize.width);
-    default:
-      return y * size.height / absoluteImageSize.height;
-  }
-}
-
-class CameraView extends StatefulWidget {
-  const CameraView({
-    Key? key,
-    required this.title,
-    required this.customPaint,
-    this.text,
-    required this.onImage,
-    this.initialDirection = CameraLensDirection.front,
-  }) : super(key: key);
-
-  final String title;
-  final CustomPaint? customPaint;
-  final String? text;
-  final Function(InputImage inputImage) onImage;
-  final CameraLensDirection initialDirection;
-
-  @override
-  State<CameraView> createState() => _CameraViewState();
 }
 
 class _CameraViewState extends State<CameraView> {
@@ -231,7 +286,9 @@ class _CameraViewState extends State<CameraView> {
         maxZoomLevel = value;
       });
       _controller?.startImageStream(_processCameraImage);
-      setState(() {});
+      context
+          .read<FaceDetectorRebuildBloc>()
+          .add(SetGetFaceDetectorRebuildEvent());
     });
   }
 
@@ -284,15 +341,6 @@ class _CameraViewState extends State<CameraView> {
   }
 }
 
-class FaceDetectorView extends StatefulWidget {
-  final bool rebuildScreen;
-
-  const FaceDetectorView({super.key, this.rebuildScreen = false});
-
-  @override
-  State<FaceDetectorView> createState() => FaceDetectorViewState();
-}
-
 Widget getFaceDetectorView() => SizedBox(
       height: 1,
       width: 1,
@@ -301,80 +349,26 @@ Widget getFaceDetectorView() => SizedBox(
           : const SizedBox.shrink(),
     );
 
-class FaceDetectorViewState extends State<FaceDetectorView> {
-  final FaceDetector _faceDetector = FaceDetector(
-    options: FaceDetectorOptions(
-      enableContours: true,
-      enableClassification: true,
-    ),
-  );
-  bool _canProcess = true;
-  bool _isBusy = false;
-  CustomPaint? _customPaint;
-  String? _text;
-  int _conut = 0;
-
-  @override
-  void initState() {
-    _conut = eyeBlinkingCount.value;
-    super.initState();
-  }
-
-  @override
-  void dispose() {
-    _canProcess = false;
-    _faceDetector.close();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CameraView(
-      title: 'Face Detector Count : ${eyeBlinkingCount.value}',
-      customPaint: _customPaint,
-      text: _text,
-      onImage: (inputImage) {
-        processImage(inputImage);
-      },
-    );
-  }
-
-  Future<void> processImage(InputImage inputImage) async {
-    if (!_canProcess) return;
-    if (_isBusy) return;
-    _isBusy = true;
-    final faces = await _faceDetector.processImage(inputImage);
-    if (mounted) {
-      final count = _conut + countEyeBlinks(faces, context);
-      await setEyeBlinkingCountCount();
-      if (eyeBlinkingCount.value != count) {
-        printLog('countEyeBlinks+++==> $count');
-      }
-      eyeBlinkingCount.value = count;
-      if (mounted) {
-        setState(() {
-          _text = '';
-          _conut = count;
-        });
-      }
-    }
-    if (inputImage.inputImageData?.size != null &&
-        inputImage.inputImageData?.imageRotation != null) {
-      _customPaint = CustomPaint(
-          painter: FaceDetectorPainter(faces, inputImage.inputImageData!.size,
-              inputImage.inputImageData!.imageRotation));
-    } else {
-      String text = 'Faces found: ${faces.length}\n\n';
-      for (final face in faces) {
-        text += 'face: ${face.boundingBox}\n\n';
-      }
-      _text = text;
-      _customPaint = null;
-    }
-    _isBusy = false;
-    if (mounted) {
-      setState(() {});
-    }
+double translateX(
+  double x,
+  InputImageRotation rotation,
+  Size size,
+  Size absoluteImageSize,
+) {
+  switch (rotation) {
+    case InputImageRotation.rotation90deg:
+      return x *
+          size.width /
+          (Platform.isIOS ? absoluteImageSize.width : absoluteImageSize.height);
+    case InputImageRotation.rotation270deg:
+      return size.width -
+          x *
+              size.width /
+              (Platform.isIOS
+                  ? absoluteImageSize.width
+                  : absoluteImageSize.height);
+    default:
+      return x * size.width / absoluteImageSize.width;
   }
 }
 
@@ -486,4 +480,24 @@ class ProcessIrisMovementModel {
     required this.leftIrisMovement,
     required this.rightIrisMovement,
   });
+}
+
+double translateY(
+    double y, InputImageRotation rotation, Size size, Size absoluteImageSize) {
+  switch (rotation) {
+    case InputImageRotation.rotation90deg:
+    case InputImageRotation.rotation270deg:
+      return y *
+          size.height /
+          (Platform.isIOS ? absoluteImageSize.height : absoluteImageSize.width);
+    default:
+      return y * size.height / absoluteImageSize.height;
+  }
+}
+
+Future<void> saveEyeCountRecords(int count) async {
+  SharedPreferences prefs = await SharedPreferences.getInstance();
+  int eyeCountRecords = prefs.getInt('EyeCountRecords') ?? 0;
+  eyeCountRecords = eyeCountRecords + count;
+  await prefs.setInt('EyeCountRecords', eyeCountRecords);
 }

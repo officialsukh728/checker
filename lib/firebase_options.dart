@@ -50,20 +50,19 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDSP-P3zGR3SlgmS1E1oSp8JXn60XZAtk0',
-    appId: '1:825154989323:android:9785da455a1ae7e51d860e',
-    messagingSenderId: '825154989323',
-    projectId: 'checker-b8872',
-    storageBucket: 'checker-b8872.appspot.com',
+    apiKey: 'AIzaSyCxRATix6bj2XFX6sH7BDKWP0NfxOfCCi8',
+    appId: '1:321818528485:android:8076ce86cccdfd3a46e20c',
+    messagingSenderId: '321818528485',
+    projectId: 'checker-f1765',
+    storageBucket: 'checker-f1765.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBa_z6uoupYGZPxCnk4a_g5o2ua2YcW1Nc',
-    appId: '1:825154989323:ios:4dd8c55a43fdc7f91d860e',
-    messagingSenderId: '825154989323',
-    projectId: 'checker-b8872',
-    storageBucket: 'checker-b8872.appspot.com',
-    iosClientId: '825154989323-t5jsq0k1ecqfb4nbb70qsfqhahcvuf8d.apps.googleusercontent.com',
-    iosBundleId: 'com.example.checker',
+    apiKey: 'AIzaSyBS210LyCogFb3vBT14UlV2rRQ-S2jPJaU',
+    appId: '1:321818528485:ios:f18872e961728bf946e20c',
+    messagingSenderId: '321818528485',
+    projectId: 'checker-f1765',
+    storageBucket: 'checker-f1765.appspot.com',
+    iosBundleId: 'com.checker.device',
   );
 }

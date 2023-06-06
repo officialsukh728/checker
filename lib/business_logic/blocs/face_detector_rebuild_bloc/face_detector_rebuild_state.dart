@@ -8,3 +8,13 @@ class FaceDetectorRebuildInitial extends FaceDetectorRebuildState {
   @override
   List<Object> get props => [];
 }
+
+class FaceDetectorRebuildLoading extends FaceDetectorRebuildState {
+  @override
+  List<Object> get props => [];
+}
+
+class FaceDetectorRebuildLoaded extends FaceDetectorRebuildState {
+  @override
+  List<Object> get props => [];
+}
